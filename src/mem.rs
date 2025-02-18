@@ -28,31 +28,21 @@ extern "C" fn sigsegv_handler(sig: i32, info: *mut siginfo_t, context: *mut c_vo
         let ucontext = context as *mut ucontext_t;
         // Get whether the fault was a read or write
         #[cfg(target_arch = "x86_64")]
-        let ip = unsafe { ((*ucontext).uc_mcontext).gregs[libc::REG_RIP as usize] as *const u8 }; // Instruction Pointer
+        let is_write = unsafe { ((*ucontext).uc_mcontext).gregs[libc::REG_ERR as usize] & 0x2 != 0}; // Instruction Pointer
 
         #[cfg(target_arch = "aarch64")]
-        let ip = unsafe {(*(*ucontext).uc_mcontext).__ss.__pc as *const u8}; // Program Counter
+        let is_write = unsafe {detect_faulting_operation((*(*ucontext).uc_mcontext).__ss.__pc as *const u8) == Some("WRITE")}; // Program Counter
 
-        println!("Segmentation fault at address: {:?}", ip);
-        println!("Faulting instruction at: {:?}", ip);
-
-        let operation = unsafe { detect_faulting_operation(ip) };
-        match operation {
-            Some("READ") => println!("Segfault caused by a READ operation."),
-            Some("WRITE") => println!("Segfault caused by a WRITE operation."),
-            _ => println!("Could not determine if it was a READ or WRITE."),
-        }
-        unsafe {
-            tracing::error!("Faulting address: {:?}", si_addr);
-            match get_tracked_allocation(si_addr as *const u8) {
-                Some(allocation) => {
-                    tracing::error!("Faulting address is part of allocation: {:?}", allocation);
-                    Block::page_of(si_addr as *mut u8).change_permissions(Permissions::READ | Permissions::WRITE);
-                },
-                None => {
-                    tracing::error!("Faulting address is not part of any tracked allocation");
-                    std::process::exit(1);
-                }
+        tracing::error!("Is write?: {:?}", is_write);
+        tracing::error!("Faulting address: {:?}", si_addr);
+        match get_tracked_allocation(si_addr as *const u8) {
+            Some(allocation) => {
+                tracing::error!("Faulting address is part of allocation: {:?}", allocation);
+                Block::page_of(si_addr as *mut u8).change_permissions(Permissions::READ | Permissions::WRITE);
+            },
+            None => {
+                tracing::error!("Faulting address is not part of any tracked allocation");
+                std::process::exit(1);
             }
         }
     }
@@ -61,6 +51,7 @@ extern "C" fn sigsegv_handler(sig: i32, info: *mut siginfo_t, context: *mut c_vo
 // Detect whether the faulting instruction was a read or a write
 unsafe fn detect_faulting_operation(ip: *const u8) -> Option<&'static str> {
     if ip.is_null() {
+        tracing::error!("Instruction Pointer is null");
         return None;
     }
     
