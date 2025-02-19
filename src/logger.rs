@@ -64,7 +64,10 @@ pub unsafe fn init_logging() {
     //     .without_time()
     //     .init();
     // tracing::register
-    let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger);
+
+    // let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger);
+    let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger.with_filter(tracing_subscriber::filter::LevelFilter::INFO));
+    // let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger.with_filter(tracing_subscriber::filter::LevelFilter::OFF));
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting tracing default failed");
 }

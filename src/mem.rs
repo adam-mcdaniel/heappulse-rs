@@ -2,7 +2,7 @@ extern crate libc;
 use core::ffi::c_void;
 use libc::{size_t, SA_SIGINFO, siginfo_t, ucontext_t, SIGBUS, SIGSEGV, sigaction, sighandler_t};
 
-use crate::{INTERVAL_CONFIG, globals::*, interval::IntervalTest, logger::init_logging, track::{Block, Permissions}};
+use crate::{UNPROTECT_READ_WRITE_ON_FAULT, INTERVAL_CONFIG, globals::*, interval::IntervalTest, logger::init_logging, track::{Block, Permissions}};
 // Store original malloc and free function pointers
 static mut ORIGINAL_MALLOC: Option<extern "C" fn(size_t) -> *mut c_void> = None;
 static mut ORIGINAL_FREE: Option<extern "C" fn(*mut c_void)> = None;
@@ -37,7 +37,9 @@ extern "C" fn sigsegv_handler(sig: i32, info: *mut siginfo_t, context: *mut c_vo
         let ucontext = context as *mut ucontext_t;
         // Get whether the fault was a read or write
         #[cfg(target_arch = "x86_64")]
-        let is_write = unsafe { ((*ucontext).uc_mcontext).gregs[libc::REG_ERR as usize] & 0x2 != 0}; // Instruction Pointer
+        let is_write = unsafe { ((*ucontext).uc_mcontext).gregs[libc::REG_ERR as usize] & 0x2 != 0 };
+        // let is_write = unsafe { detect_faulting_operation(((*ucontext).uc_mcontext).gregs[libc::REG_RIP as usize] as *const u8) == Some("WRITE")
+        //     || ((*ucontext).uc_mcontext).gregs[libc::REG_ERR as usize] * 0x2 != 0}; // Instruction Pointer
 
         #[cfg(target_arch = "aarch64")]
         let is_write = unsafe {detect_faulting_operation((*(*ucontext).uc_mcontext).__ss.__pc as *const u8) == Some("WRITE")}; // Program Counter
@@ -48,10 +50,10 @@ extern "C" fn sigsegv_handler(sig: i32, info: *mut siginfo_t, context: *mut c_vo
             Some(allocation) => {
                 get_interval_test_suite_mut().on_access(&allocation, is_write);
                 tracing::trace!("Faulting address is part of allocation: {:?}", allocation);
-                if !is_write {
-                    Block::page_of(si_addr as *mut u8).change_permissions(Permissions::READ);
-                } else {
+                if UNPROTECT_READ_WRITE_ON_FAULT || is_write {
                     Block::page_of(si_addr as *mut u8).change_permissions(Permissions::READ | Permissions::WRITE);
+                } else {
+                    Block::page_of(si_addr as *mut u8).change_permissions(Permissions::READ);
                 }
             },
             None => {
@@ -295,25 +297,25 @@ pub extern "C" fn mmap(addr: *mut c_void, length: size_t, prot: i32, flags: i32,
         enter_hook();
     }
 
-    let ptr = original_mmap(addr, length, prot, flags, fd, offset);
+    let size = align_up_to_page_size(length as usize, crate::page_size());
+    let ptr = original_mmap(addr, size, prot, flags, fd, offset);
     if ptr.is_null() {
         tracing::error!("Failed to map memory");
         exit_hook();
         return ptr;
     }
 
-    let size = align_up_to_page_size(length as usize, crate::page_size());
     tracing::trace!("Mapping {size} bytes at {ptr:?}", size = size, ptr = ptr);
 
-    match track_allocation(ptr as *mut u8, size) {
+    match track_allocation(ptr as *mut u8, length as usize) {
         Ok(true) => {
-            tracing::warn!("Block {ptr:?} with size {size} tracked, already had previous entry");
+            tracing::warn!("Block {ptr:?} with size {length} tracked, already had previous entry");
         },
         Ok(false) => {
-            tracing::trace!("Block {ptr:?} with size {size} tracked");
+            tracing::trace!("Block {ptr:?} with size {length} tracked");
         },
         Err(e) => {
-            tracing::error!("Failed to track allocation {ptr:?} with size {size}: {e:?}");
+            tracing::error!("Failed to track allocation {ptr:?} with size {length}: {e:?}");
         }
     }
     if let Some(alloc) = get_tracked_allocation(ptr as *const u8) {
