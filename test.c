@@ -13,6 +13,7 @@ int main() {
     for (int i = 10; i < 1000; i++) {
         printf("%02x ", ((char *)x)[i]);
         ((char*)x)[i] = 0x41;
+        printf("%02x ", ((char *)x)[i]);
     }
     printf("\n");
 

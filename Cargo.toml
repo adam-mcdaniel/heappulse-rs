@@ -18,5 +18,4 @@ tracing-subscriber = "0.3.19"
 mach = "0.3"
 
 [lib]
-# crate-type = ["cdylib"]
-crate-type = ["staticlib"]
+crate-type = ["cdylib", "staticlib"]

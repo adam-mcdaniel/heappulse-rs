@@ -7,3 +7,4 @@ cargo build
 
 # cp ./target/release/librust_compressor.a ./libcompress.a
 cp ./target/debug/librust_compressor.a ./libcompress.a
+cp ./target/debug/librust_compressor.so ./libcompress.so
