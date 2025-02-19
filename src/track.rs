@@ -5,6 +5,7 @@ use heapless::FnvIndexSet as IndexSet;
 use libc::{PROT_EXEC, PROT_NONE, PROT_READ, PROT_WRITE};
 use core::fmt::{Formatter, Result as FmtResult};
 use libc::{MAP_PRIVATE, MAP_ANONYMOUS, mmap};
+use crate::compress::CompressionAlgorithm;
 use crate::page_size;
 
 use super::mem::{align_up_to_page_size, align_down_to_page_size};
@@ -33,6 +34,31 @@ impl Block {
         }
     }
 
+    pub fn ptr(&self) -> *const u8 {
+        self.ptr
+    }
+    
+    pub fn ptr_mut(&self) -> *mut u8 {
+        self.ptr
+    }
+
+    pub fn compress(&mut self, compression_algorithm: CompressionAlgorithm) -> Option<usize> {
+        compression_algorithm.compress_in_place(self)
+    }
+
+    pub fn decompress(&mut self, compression_algorithm: CompressionAlgorithm, compressed_size: usize) -> Option<usize> {
+        compression_algorithm.decompress_in_place(self, compressed_size)
+    }
+
+    pub fn with_size(mut self, size_in_bytes: usize) -> Self {
+        self.size_in_bytes = size_in_bytes;
+        self
+    }
+
+    pub fn size(&self) -> usize {
+        self.size_in_bytes
+    }
+
     pub fn physical_address(&self) -> Option<u64> {
         virtual_to_physical(self.ptr)
     }
@@ -49,6 +75,12 @@ impl Block {
     pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             core::slice::from_raw_parts(self.ptr as *const u8, self.size_in_bytes)
+        }
+    }
+
+    pub fn as_mut_bytes(&self) -> &mut [u8] {
+        unsafe {
+            core::slice::from_raw_parts_mut(self.ptr, self.size_in_bytes)
         }
     }
 
@@ -83,6 +115,18 @@ impl Block {
             }
             tracing::debug!("Changed permissions for 0x{:08x} to {:?}", start, new_permissions.bits());
         }
+    }
+}
+
+impl AsRef<[u8]> for Block {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+impl AsMut<[u8]> for Block {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.as_mut_bytes()
     }
 }
 

@@ -9,6 +9,12 @@ use crate::{
 pub mod dummy;
 pub use dummy::*;
 
+pub mod dummy_compress;
+pub use dummy_compress::*;
+
+pub mod compress;
+pub use compress::*;
+
 pub trait IntervalTest {
     fn name(&self) -> &str;
 

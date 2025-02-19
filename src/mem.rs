@@ -19,7 +19,8 @@ pub fn align_down_to_page_size(size: usize, page_size: usize) -> usize {
 
 /// Signal handler for SIGSEGV/SIGBUS
 extern "C" fn sigsegv_handler(sig: i32, info: *mut siginfo_t, context: *mut c_void) {
-    tracing::error!("⚠️ Caught signal: {} (Segfault or Bus Error)", sig);
+    // tracing::error!("⚠️ Caught signal: {} (Segfault or Bus Error)", sig);
+    tracing::trace!("Caught fault on protected memory");
     if is_in_hook() {
         tracing::error!("Already in hook, exiting signal handler");
         std::process::exit(1);
@@ -85,7 +86,7 @@ unsafe fn detect_faulting_operation(ip: *const u8) -> Option<&'static str> {
     #[cfg(target_arch = "aarch64")]
     {
         let instr = *(ip as *const u32); // Read 32-bit instruction
-        tracing::error!("Instruction: {:#010x}", instr);
+        tracing::trace!("Instruction: {:#010x}", instr);
 
         // Check for LOAD instructions (LDR, LDRB, LDRH, LDRSW)
         if (instr & 0xFFC00000) == 0xB9400000 ||  // LDR (32-bit/64-bit)

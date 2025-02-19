@@ -4,8 +4,9 @@ pub mod globals;
 pub mod logger;
 pub mod interval;
 pub mod config;
-pub use config::*;
+pub mod compress;
 
+pub use config::*;
 
 pub fn page_size() -> usize {
     unsafe {
