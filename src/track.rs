@@ -33,6 +33,10 @@ impl Block {
         }
     }
 
+    pub fn physical_address(&self) -> Option<u64> {
+        virtual_to_physical(self.ptr)
+    }
+
     pub fn page_of(ptr: *mut u8) -> Self {
         let page_size = crate::page_size();
         let start = align_down_to_page_size(ptr as usize, page_size);
@@ -48,6 +52,14 @@ impl Block {
         }
     }
 
+    pub fn protect(&self) {
+        self.change_permissions(Permissions::NONE);
+    }
+
+    pub fn unprotect(&self) {
+        self.change_permissions(Permissions::READ | Permissions::WRITE);
+    }
+
     pub fn contains(&self, ptr: *const u8) -> bool {
         let start = self.ptr as usize;
         let end = start + self.size_in_bytes;
@@ -57,19 +69,19 @@ impl Block {
 
     pub fn change_permissions(&self, new_permissions: Permissions) {
         // Use `mmap` to change the permissions of the memory region
-        tracing::info!("Changing permissions for {:p} to {:?}", self.ptr, new_permissions.bits());
+        tracing::debug!("Changing permissions for {:p} to {:?}", self.ptr, new_permissions.bits());
         unsafe {
             let page_size = crate::page_size();
             let start = align_down_to_page_size(self.ptr as usize, page_size);
             let end = align_up_to_page_size(self.ptr as usize + self.size_in_bytes, page_size);
             let size = end - start;
-            tracing::info!("Changing permissions for {:p} to {:?} (size: {})", self.ptr, new_permissions, size);
+            tracing::debug!("Changing permissions for {:p} to {:?} (size: {})", self.ptr, new_permissions, size);
 
             let ptr = libc::mprotect(start as *mut c_void, size, new_permissions.bits() as i32);
             if ptr != 0 {
                 panic!("Failed to change permissions");
             }
-            tracing::info!("Changed permissions for 0x{:08x} to {:?}", start, new_permissions.bits());
+            tracing::debug!("Changed permissions for 0x{:08x} to {:?}", start, new_permissions.bits());
         }
     }
 }
@@ -126,6 +138,14 @@ impl<const N: usize> Track<N> {
     pub fn get_size(&self, ptr: *const u8) -> Option<usize> {
         self.get(ptr).map(|alloc| alloc.size_in_bytes)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Block> {
+        self.allocations.values()
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = Block> {
+        self.allocations.into_iter().map(|(_, v)| v)
+    }
 }
 
 unsafe impl<const N: usize> Send for Track<N> {}
@@ -136,5 +156,58 @@ impl<const N: usize> Debug for Track<N> {
         f.debug_struct("Track")
             .field("allocations", &self.allocations)
             .finish()
+    }
+}
+
+
+
+
+#[cfg(target_os = "linux")]
+use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::io::{Read, Seek, SeekFrom};
+
+#[cfg(target_os = "macos")]
+use mach::vm::*;
+#[cfg(target_os = "macos")]
+use mach::traps::*;
+#[cfg(target_os = "macos")]
+use mach::vm_region::*;
+#[cfg(target_os = "macos")]
+use mach::kern_return::*;
+#[cfg(target_os = "macos")]
+use mach::vm_types::*;
+#[cfg(target_os = "macos")]
+use std::mem;
+
+/// Returns the physical address of a virtual address if possible.
+/// - On **Linux**, it reads from `/proc/self/pagemap`.
+/// - On **macOS**, it uses `mach` APIs.
+/// - On **Other OSes**, it always returns `None`.
+pub fn virtual_to_physical(addr: *const u8) -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let page_size = page_size();
+        let pagemap_entry_size = 8;
+
+        let mut file = File::open("/proc/self/pagemap").ok()?;
+        let vpage = (addr as u64) / page_size as u64;
+        file.seek(SeekFrom::Start(vpage * pagemap_entry_size)).ok()?;
+
+        let mut entry_bytes = [0u8; 8];
+        file.read_exact(&mut entry_bytes).ok()?;
+        let entry = u64::from_le_bytes(entry_bytes);
+
+        if (entry >> 63) & 1 == 0 {
+            return None; // Page not in RAM
+        }
+
+        let pfn = entry & ((1 << 55) - 1);
+        return Some((pfn * page_size as u64) + (addr as u64 % page_size as u64));
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        None // Unsupported OS
     }
 }

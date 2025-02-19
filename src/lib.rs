@@ -2,9 +2,9 @@ pub mod mem;
 pub mod track;
 pub mod globals;
 pub mod logger;
-
-
-pub const ALIGN_ALLOCATIONS_TO_PAGE_SIZE: bool = true;
+pub mod interval;
+pub mod config;
+pub use config::*;
 
 
 pub fn page_size() -> usize {
