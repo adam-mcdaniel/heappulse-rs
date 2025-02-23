@@ -309,6 +309,28 @@ fn exit_hook() {
 }
 
 #[no_mangle]
+pub extern "C" fn realloc(ptr: *mut c_void, size: size_t) -> *mut c_void {
+    trace!("realloc({:?}, {})", ptr, size);
+    if is_in_hook() {
+        warn!("Already in hook, exiting realloc");
+        return original_malloc(size);
+    } else {
+        enter_hook();
+    }
+
+    let new_ptr = original_malloc(size);
+    if !new_ptr.is_null() {
+        unsafe {
+            libc::memcpy(new_ptr, ptr, size);
+        }
+        original_free(ptr);
+    }
+
+    exit_hook();
+    new_ptr
+}
+
+#[no_mangle]
 pub extern "C" fn malloc(size: size_t) -> *mut c_void {
     trace!("malloc({})", size);
     if is_in_hook() {
