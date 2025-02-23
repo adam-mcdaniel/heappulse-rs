@@ -313,13 +313,13 @@ pub extern "C" fn malloc(size: size_t) -> *mut c_void {
     trace!("malloc({})", size);
     if is_in_hook() {
         warn!("Already in hook, exiting malloc");
-        return original_malloc_with_mmap(size);
+        return original_malloc(size);
     } else {
         enter_hook();
     }
     // let size = align_up_to_page_size(size as usize, crate::page_size());
     info!("Allocating {size} bytes", size = size);
-    let ptr = original_malloc_with_mmap(align_up_to_page_size(size, page_size()));
+    let ptr = original_malloc(align_up_to_page_size(size, page_size()));
 
     match track_allocation(ptr as *mut u8, size) {
         Ok(true) => {
@@ -354,6 +354,7 @@ pub extern "C" fn free(ptr: *mut c_void) {
     trace!("free({:?})", ptr);
     if is_in_hook() {
         // return original_free_with_munmap(ptr);
+        original_free(ptr);
         return;
     } else {
         enter_hook();
@@ -373,6 +374,7 @@ pub extern "C" fn free(ptr: *mut c_void) {
     get_interval_test_suite_mut().schedule(&INTERVAL_CONFIG);
 
     // original_free_with_munmap(ptr);
+    original_free(ptr);
     exit_hook();
 }
 
