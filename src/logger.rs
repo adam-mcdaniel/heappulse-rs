@@ -9,9 +9,12 @@ use libc::{write, STDOUT_FILENO};
 // No-allocation logger that writes directly to stdout
 struct NoAllocLogger;
 
+static LOG_LOCK: spin::Mutex<()> = spin::Mutex::new(());
+
 impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for NoAllocLogger {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
         let mut writer = LowLevelWriter;
+        let _lock = LOG_LOCK.lock();
 
         // Write the colorized log level
         let color = match *event.metadata().level() {
