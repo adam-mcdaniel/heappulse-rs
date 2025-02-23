@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 bitflags = "2.8.0"
-heapless = "0.8.0"
+# heapless = "0.8.0"
 lazy_static = { version = "1.5.0", features = ["spin", "spin_no_std"] }
 libc = "0.2"
 linked_list_allocator = "0.10"
@@ -18,6 +18,9 @@ snap = { version = "1.1", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mach = "0.3"
+
+[build]
+rustflags = ["-C", "link-args=-Wl,-no_compact_unwind,-fno-leading-underscore"]
 
 [lib]
 crate-type = ["cdylib", "staticlib"]

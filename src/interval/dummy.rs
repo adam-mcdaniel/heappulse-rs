@@ -1,15 +1,15 @@
 use crate::{globals::get_tracked_allocations, track::Block};
 
-use super::IntervalTest;
+use super::Interval;
 
-pub struct DummyIntervalTest;
+pub struct DummyInterval;
 
-impl IntervalTest for DummyIntervalTest {
+impl Interval for DummyInterval {
     fn name(&self) -> &str {
         "Dummy Interval Test"
     }
 
-    fn boxed(&self) -> Box<dyn IntervalTest> {
+    fn boxed(&self) -> Box<dyn Interval> {
         Box::new(Self)
     }
 

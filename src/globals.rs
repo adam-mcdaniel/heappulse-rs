@@ -1,43 +1,55 @@
 use spin::RwLock;
-use crate::interval::{CompressAlloc, DummyCompressIntervalTest, DummyIntervalTest, IntervalTest};
 
 use super::track::{Track, Block};
-use super::interval::{IntervalTestSuite};
+use super::interval::{*, Interval, IntervalSuite};
 use super::compress::CompressionAlgorithm;
 use super::MAX_TRACKED_ALLOCATIONS;
 
-pub static TRACK: RwLock<Track<MAX_TRACKED_ALLOCATIONS>> = RwLock::new(Track::new());
+pub static TRACK: RwLock<Option<Track<MAX_TRACKED_ALLOCATIONS>>> = RwLock::new(None);
+
+fn init_tracking() {
+    if TRACK.read().is_some() {
+        return;
+    }
+    *TRACK.write() = Some(Track::new());
+}
 
 pub fn track_allocation(ptr: *mut u8, size: usize) -> Result<bool, Block> {
-    TRACK.write().insert(Block::new(ptr, size))
+    init_tracking();
+    TRACK.write().as_mut().unwrap().insert(Block::new(ptr, size))
 }
 
 pub fn get_tracked_allocation(ptr: *const u8) -> Option<Block> {
-    TRACK.read().get(ptr)
+    init_tracking();
+    TRACK.read().as_ref().unwrap().get(ptr)
 }
 
 pub fn track_deallocation(ptr: *const u8) -> Result<Block, ()> {
-    TRACK.write().remove_ptr(ptr)
+    init_tracking();
+    TRACK.write().as_mut().unwrap().remove_ptr(ptr)
 }
 
-pub fn get_tracked_allocations<>() -> Track<MAX_TRACKED_ALLOCATIONS> {
-    TRACK.read().clone()
+pub fn get_tracked_allocations() -> Track<MAX_TRACKED_ALLOCATIONS> {
+    init_tracking();
+    TRACK.read().as_ref().unwrap().clone()
 }
 
 lazy_static::lazy_static! {
-    static ref INTERVAL_TEST_SUITE: RwLock<IntervalTestSuite> = RwLock::new(IntervalTestSuite::from_tests(&[
-        // DummyIntervalTest.boxed(),
-        // DummyCompressIntervalTest(CompressionAlgorithm::LZ4).boxed()
-        // DummyCompressIntervalTest(CompressionAlgorithm::Snappy).boxed()
+    static ref INTERVAL_TEST_SUITE: RwLock<IntervalSuite> = RwLock::new(IntervalSuite::from_tests(&[
+        DummyInterval.boxed(),
+        // DummyCompressInterval(CompressionAlgorithm::LZ4).boxed()
+        // DummyCompressInterval(CompressionAlgorithm::Snappy).boxed()
         // CompressAlloc::new(CompressionAlgorithm::Snappy).boxed()
-        CompressAlloc::new(CompressionAlgorithm::LZ4).boxed()
+        // crate::interval::CompressAlloc::new(CompressionAlgorithm::LZ4).boxed()
     ]));
 }
 
-pub fn get_interval_test_suite<'a>() -> spin::RwLockReadGuard<'a, IntervalTestSuite> {
+pub fn get_interval_test_suite<'a>() -> spin::RwLockReadGuard<'a, IntervalSuite> {
+    init_tracking();
     INTERVAL_TEST_SUITE.read()
 }
 
-pub fn get_interval_test_suite_mut<'a>() -> spin::RwLockWriteGuard<'a, IntervalTestSuite> {
+pub fn get_interval_test_suite_mut<'a>() -> spin::RwLockWriteGuard<'a, IntervalSuite> {
+    init_tracking();
     INTERVAL_TEST_SUITE.write()
 }

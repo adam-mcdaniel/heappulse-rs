@@ -1,16 +1,16 @@
-use crate::{compress::CompressionAlgorithm, globals::get_tracked_allocations, track::Block};
+use crate::{compress::CompressionAlgorithm, globals::get_tracked_allocations};
 
-use super::IntervalTest;
+use super::Interval;
 
 #[derive(Clone, Copy)]
-pub struct DummyCompressIntervalTest(pub CompressionAlgorithm);
+pub struct DummyCompressInterval(pub CompressionAlgorithm);
 
-impl IntervalTest for DummyCompressIntervalTest {
+impl Interval for DummyCompressInterval {
     fn name(&self) -> &str {
         "Dummy Compress Interval Test"
     }
 
-    fn boxed(&self) -> Box<dyn IntervalTest> {
+    fn boxed(&self) -> Box<dyn Interval> {
         Box::new(*self)
     }
 

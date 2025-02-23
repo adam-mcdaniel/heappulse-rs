@@ -1,12 +1,9 @@
 use tracing::{Event, Subscriber, Level};
-use tracing_core::span::{Attributes, Id, Record};
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
 use core::fmt::{Debug, Write};
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::filter::LevelFilter;
-use std::io::Write as _;
 use libc::{write, STDOUT_FILENO};
 
 // No-allocation logger that writes directly to stdout
@@ -66,13 +63,15 @@ pub unsafe fn init_logging() {
     // tracing::register
 
     // let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger);
-    let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger.with_filter(tracing_subscriber::filter::LevelFilter::INFO));
+    let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger.with_filter(crate::config::LOG_LEVEL));
     // let subscriber = tracing_subscriber::Registry::default().with(NoAllocLogger.with_filter(tracing_subscriber::filter::LevelFilter::OFF));
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting tracing default failed");
 }
+
+#[cfg(test)]
 mod tests {
-    use super::*;
+    use super::init_logging;
 
     #[test]
     fn test() {
