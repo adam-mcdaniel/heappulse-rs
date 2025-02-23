@@ -6,7 +6,7 @@ use libc::{PROT_EXEC, PROT_NONE, PROT_READ, PROT_WRITE};
 use core::fmt::{Formatter, Result as FmtResult};
 use crate::compress::CompressionAlgorithm;
 use tracing::*;
-use super::{align_up_to_page_size, align_down_to_page_size};
+use super::{page_size, align_up_to_page_size, align_down_to_page_size};
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
